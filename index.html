@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AZTV Proqram İdarəetmə</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="background-pattern"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">📺</div>
+                <span class="logo-text">AZTV Panel</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Channel Selector -->
+            <div class="channel-tabs">
+                <button class="channel-tab active" data-channel="1">AzTV</button>
+                <button class="channel-tab" data-channel="2">İdman</button>
+                <button class="channel-tab" data-channel="3">Mədəniyyət</button>
+            </div>
+
+            <!-- Program List -->
+            <section class="card">
+                <div class="card-header">
+                    <h2 id="channelTitle">AzTV - Proqram Cədvəli</h2>
+                    <button class="btn btn-icon" id="refreshBtn" title="Yenilə">🔄</button>
+                </div>
+                
+                <div class="program-list" id="programList">
+                    <div class="loading">Yüklənir...</div>
+                </div>
+                
+                <!-- Add Program Button -->
+                <button class="btn btn-add" id="addProgramBtn">
+                    ➕ Yeni Proqram Əlavə Et
+                </button>
+            </section>
+            
+            <!-- Add/Edit Form Modal -->
+            <div class="modal" id="programModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="modalTitle">Yeni Proqram</h3>
+                        <button class="btn-close" id="closeModal">✕</button>
+                    </div>
+                    <form id="programForm">
+                        <div class="form-group">
+                            <label>Tarix</label>
+                            <input type="date" id="inputDate" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Başlama</label>
+                                <input type="time" id="inputStartTime" value="08:00" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Bitmə</label>
+                                <input type="time" id="inputEndTime" value="09:00" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Proqram Adı</label>
+                            <input type="text" id="inputTitle" placeholder="məs. Səhər Xəbərləri" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Təsvir</label>
+                            <textarea id="inputDescription" placeholder="məs. Günün ilk məlumat buraxılışı" rows="2"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelBtn">Ləğv et</button>
+                            <button type="submit" class="btn btn-primary">Yadda Saxla</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Date Edit Modal -->
+            <div class="modal" id="dateModal">
+                <div class="modal-content" style="max-width: 400px;">
+                    <div class="modal-header">
+                        <h3 id="dateModalTitle">Tarixi Dəyiş</h3>
+                        <button class="btn-close" id="closeDateModal">✕</button>
+                    </div>
+                    <div style="padding: 24px;">
+                        <div class="form-group">
+                            <label>Yeni Tarix</label>
+                            <input type="date" id="inputNewDate" required>
+                        </div>
+                        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">
+                            Bu tarixdəki bütün proqramlar yeni tarixə köçürüləcək.
+                        </p>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelDateBtn">Ləğv et</button>
+                            <button type="button" class="btn btn-primary" id="saveDateBtn">Dəyiş</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Toast -->
+        <div class="toast" id="toast"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
