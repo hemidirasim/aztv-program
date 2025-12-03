@@ -111,28 +111,34 @@ function renderPrograms() {
         return;
     }
     
-    // Sort days by date
+    // Sort days by date for display
     const sortedDays = [...programs].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     
+    // Create mapping: sorted index -> original index
+    const sortedToOriginal = sortedDays.map(sortedDay => 
+        programs.findIndex(orig => orig.date === sortedDay.date && orig.title === sortedDay.title)
+    );
+    
     let html = '';
-    sortedDays.forEach((day, dayIndex) => {
+    sortedDays.forEach((day, sortedIndex) => {
+        const originalDayIndex = sortedToOriginal[sortedIndex];
         const dayTitle = day.title || getDayName(day.date);
         const formattedDate = formatDate(day.date);
         
-        // Date header (clickable to edit)
-        html += `<div class="date-header" onclick="editDateGroup(${dayIndex})" title="Klikləyin tarixi dəyişmək üçün">
+        // Date header (clickable to edit) - use original index
+        html += `<div class="date-header" onclick="editDateGroup(${originalDayIndex})" title="Klikləyin tarixi dəyişmək üçün">
             <span class="date-day">${dayTitle}</span>
             <span class="date-full">${formattedDate}</span>
             <span class="date-edit-icon">✏️</span>
         </div>`;
         
-        // Programs for this day (items array)
-        const items = day.items || [];
-        const sortedItems = [...items].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+        // Programs for this day (items array) - use original day's items
+        const originalDay = programs[originalDayIndex];
+        const items = originalDay.items || [];
         
-        sortedItems.forEach((item, itemIndex) => {
+        items.forEach((item, itemIndex) => {
             html += `
-                <div class="program-item" draggable="true" data-day="${dayIndex}" data-item="${itemIndex}">
+                <div class="program-item" draggable="true" data-day="${originalDayIndex}" data-item="${itemIndex}">
                     <div class="drag-handle">⋮⋮</div>
                     <div class="program-time">${item.start_time || '--:--'} - ${item.end_time || '--:--'}</div>
                     <div class="program-info">
@@ -140,12 +146,21 @@ function renderPrograms() {
                         ${item.description ? `<div class="program-desc">${item.description}</div>` : ''}
                     </div>
                     <div class="program-actions">
-                        <button class="btn-edit" onclick="editProgram(${dayIndex}, ${itemIndex})" title="Redaktə">✏️</button>
-                        <button class="btn-delete" onclick="deleteProgram(${dayIndex}, ${itemIndex})" title="Sil">🗑️</button>
+                        <button class="btn-edit" onclick="editProgram(${originalDayIndex}, ${itemIndex})" title="Redaktə">✏️</button>
+                        <button class="btn-delete" onclick="deleteProgram(${originalDayIndex}, ${itemIndex})" title="Sil">🗑️</button>
                     </div>
                 </div>
             `;
         });
+        
+        // Add "Add Program" button for this day
+        html += `
+            <div class="day-add-button">
+                <button class="btn-add-day" onclick="openAddModalForDay('${day.date}')" title="Bu günə proqram əlavə et">
+                    ➕ Bu günə proqram əlavə et
+                </button>
+            </div>
+        `;
     });
     
     programList.innerHTML = html;
@@ -154,8 +169,9 @@ function renderPrograms() {
     setupDragAndDrop();
 }
 
-// Drag and Drop
-let draggedIndex = null;
+// Drag and Drop - NEW structure (days with items)
+let draggedDayIndex = null;
+let draggedItemIndex = null;
 
 function setupDragAndDrop() {
     const items = programList.querySelectorAll('.program-item');
@@ -171,7 +187,8 @@ function setupDragAndDrop() {
 }
 
 function handleDragStart(e) {
-    draggedIndex = parseInt(this.dataset.index);
+    draggedDayIndex = parseInt(this.dataset.day);
+    draggedItemIndex = parseInt(this.dataset.item);
     this.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
 }
@@ -201,22 +218,73 @@ async function handleDrop(e) {
     e.preventDefault();
     this.classList.remove('drag-over');
     
-    const targetIndex = parseInt(this.dataset.index);
+    const targetDayIndex = parseInt(this.dataset.day);
+    const targetItemIndex = parseInt(this.dataset.item);
     
-    if (draggedIndex !== null && draggedIndex !== targetIndex) {
-        // Reorder programs
-        const draggedProgram = programs[draggedIndex];
-        programs.splice(draggedIndex, 1);
-        programs.splice(targetIndex, 0, draggedProgram);
-        
-        renderPrograms();
-        const saved = await saveToAPI();
-        if (saved) {
-            showToast('✅ Sıralama dəyişdirildi və saxlanıldı');
-        }
+    console.log('🎯 Drop:', {
+        dragged: { day: draggedDayIndex, item: draggedItemIndex },
+        target: { day: targetDayIndex, item: targetItemIndex }
+    });
+    
+    if (draggedDayIndex === null || draggedItemIndex === null) {
+        console.warn('⚠️ No dragged item');
+        return;
     }
     
-    draggedIndex = null;
+    // Only allow reordering within the same day
+    if (draggedDayIndex !== targetDayIndex) {
+        showToast('⚠️ Yalnız eyni gün daxilində sıralama dəyişdirilə bilər', true);
+        draggedDayIndex = null;
+        draggedItemIndex = null;
+        return;
+    }
+    
+    // Same position, no change needed
+    if (draggedItemIndex === targetItemIndex) {
+        console.log('✅ Same position, no change');
+        draggedDayIndex = null;
+        draggedItemIndex = null;
+        return;
+    }
+    
+    // Reorder items within the same day
+    const day = programs[targetDayIndex];
+    if (!day || !day.items) {
+        console.error('❌ Day not found:', targetDayIndex);
+        return;
+    }
+    
+    const draggedItem = day.items[draggedItemIndex];
+    if (!draggedItem) {
+        console.error('❌ Item not found:', draggedItemIndex);
+        return;
+    }
+    
+    console.log('📦 Before reorder:', day.items.map((it, idx) => `${idx}: ${it.name}`).join(', '));
+    
+    // Remove from old position first
+    day.items.splice(draggedItemIndex, 1);
+    
+    // Calculate new index after removal
+    // If we removed an item before the target, target index shifts down by 1
+    let newIndex = targetItemIndex;
+    if (draggedItemIndex < targetItemIndex) {
+        newIndex = targetItemIndex - 1;
+    }
+    
+    // Insert at new position
+    day.items.splice(newIndex, 0, draggedItem);
+    
+    console.log('📦 After reorder:', day.items.map((it, idx) => `${idx}: ${it.name}`).join(', '));
+    
+    renderPrograms();
+    const saved = await saveToAPI();
+    if (saved) {
+        showToast('✅ Sıralama dəyişdirildi və saxlanıldı');
+    }
+    
+    draggedDayIndex = null;
+    draggedItemIndex = null;
 }
 
 // Format date
@@ -240,6 +308,19 @@ function openAddModal() {
     editingItemIndex = -1;
     modalTitle.textContent = 'Yeni Proqram';
     inputDate.value = new Date().toISOString().split('T')[0];
+    inputStartTime.value = '08:00';
+    inputEndTime.value = '09:00';
+    inputTitle.value = '';
+    inputDescription.value = '';
+    modal.classList.add('show');
+}
+
+// Open add modal for specific day
+function openAddModalForDay(date) {
+    editingDayIndex = -1;
+    editingItemIndex = -1;
+    modalTitle.textContent = 'Yeni Proqram';
+    inputDate.value = date; // Set the specific date
     inputStartTime.value = '08:00';
     inputEndTime.value = '09:00';
     inputTitle.value = '';
@@ -487,12 +568,24 @@ async function saveToAPI() {
         const responseText = await res.text();
         console.log('📥 Response:', res.status, responseText);
         
+        // Handle redirects (302, 301, etc.)
+        if (res.status >= 300 && res.status < 400) {
+            const location = res.headers.get('location');
+            console.warn('⚠️ Redirect detected:', res.status, location);
+            throw new Error(`HTTP ${res.status}: API redirect edir. Yəqin ki, authentication tələb olunur.`);
+        }
+        
         if (!res.ok) {
             let errorMsg = 'Xəta';
             try {
                 const errorData = JSON.parse(responseText);
                 errorMsg = errorData.message || errorMsg;
-            } catch(e) {}
+            } catch(e) {
+                // If not JSON, use the raw text
+                if (responseText) {
+                    errorMsg = responseText.substring(0, 100);
+                }
+            }
             throw new Error(`HTTP ${res.status}: ${errorMsg}`);
         }
         

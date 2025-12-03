@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = 3000;
-const API_LIST = 'https://aztv.az/az/programs-api';
+const API_LIST = 'https://admin.aztv.az/api/program/list';
 const API_CREATE = 'https://admin.aztv.az/api/program/create';
 
 // MIME types
@@ -50,6 +50,58 @@ function proxyRequest(targetPath, method, body, res) {
     
     const proxyReq = https.request(options, (proxyRes) => {
         let data = '';
+        
+        // Handle redirects (301, 302, 303, 307, 308)
+        if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
+            console.log('\n🔄 Redirect detected:', proxyRes.statusCode);
+            console.log('   Location:', proxyRes.headers.location);
+            
+            // Follow redirect
+            const redirectUrl = new URL(proxyRes.headers.location);
+            const redirectOptions = {
+                hostname: redirectUrl.hostname,
+                port: redirectUrl.port || 443,
+                path: redirectUrl.pathname + redirectUrl.search,
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'Content-Length': body ? Buffer.byteLength(body) : 0
+                }
+            };
+            
+            const redirectReq = https.request(redirectOptions, (redirectRes) => {
+                let redirectData = '';
+                redirectRes.on('data', chunk => {
+                    redirectData += chunk;
+                });
+                redirectRes.on('end', () => {
+                    console.log('\n📥 Redirect Response:');
+                    console.log('   Status:', redirectRes.statusCode);
+                    console.log('   Data:', redirectData.substring(0, 500));
+                    
+                    res.writeHead(redirectRes.statusCode, {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Content-Type'
+                    });
+                    res.end(redirectData);
+                });
+            });
+            
+            redirectReq.on('error', (error) => {
+                console.error('❌ Redirect error:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: error.message }));
+            });
+            
+            if (body) {
+                redirectReq.write(body);
+            }
+            redirectReq.end();
+            return;
+        }
         
         proxyRes.on('data', chunk => {
             data += chunk;
